@@ -27,9 +27,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { ChatAvatar } from "@/components/ui/avatar"
+import { useRouter } from "next/navigation"
 import { toast } from "@/components/ui/toast"
 import { botInsertSchema, type BotInsert, type Bot } from "@/db/schema"
-import { createBot } from "@/actions/bots"
+import { createBot, updateBot } from "@/actions/bots"
+import type { ChatBot } from "@/chats/queries"
 import { cn } from "@/lib/utils"
 
 export interface BotPreset {
@@ -71,25 +73,43 @@ export const BOT_PRESETS: readonly BotPreset[] = [
 ] as const
 
 interface BotFormProps {
-  onCreated: (bot: Bot) => void
+  bot?: Bot | ChatBot | null
+  onCreated?: (bot: Bot) => void
+  onUpdated?: (bot: Bot) => void
 }
 
-function BotForm({ onCreated }: BotFormProps) {
-  const [avatarSeed, setAvatarSeed] = React.useState(() => nanoid())
+function BotForm({ bot, onCreated, onUpdated }: BotFormProps) {
+  const router = useRouter()
+  const isEditing = Boolean(bot)
+
+  const initialPreset = React.useMemo(() => {
+    if (!bot) return "Research assistant"
+    const match = BOT_PRESETS.find(
+      (p) =>
+        p.name.toLowerCase() === bot.name.toLowerCase() ||
+        p.job.toLowerCase() === bot.job.toLowerCase()
+    )
+    return match ? match.label : null
+  }, [bot])
+
+  const [avatarSeed, setAvatarSeed] = React.useState(
+    () => bot?.avatar || bot?.name || nanoid()
+  )
   const [selectedPreset, setSelectedPreset] = React.useState<string | null>(
-    "Research assistant"
+    initialPreset
   )
 
   const activePreset =
-    BOT_PRESETS.find((p) => p.label === selectedPreset) ?? BOT_PRESETS[0]
+    BOT_PRESETS.find((p) => p.label === selectedPreset) ??
+    (isEditing ? null : BOT_PRESETS[0])
 
   const form = useForm<BotInsert>({
     resolver: zodResolver(botInsertSchema),
     defaultValues: {
-      name: "",
-      job: "",
-      instructions: "",
-      avatar: avatarSeed,
+      name: bot?.name ?? "",
+      job: bot?.job ?? "",
+      instructions: bot?.instructions ?? "",
+      avatar: bot?.avatar || avatarSeed,
     },
   })
 
@@ -120,16 +140,28 @@ function BotForm({ onCreated }: BotFormProps) {
 
   const onSubmit = async (values: BotInsert) => {
     try {
-      const createdBot = await createBot(values)
-      toast.add({
-        title: "Bot created",
-        description: `${createdBot.name} is ready.`,
-        type: "success",
-      })
-      onCreated(createdBot)
+      if (isEditing && bot) {
+        const updatedBot = await updateBot(bot.id, values)
+        toast.add({
+          title: "Bot updated",
+          description: `${updatedBot.name} was updated.`,
+          type: "success",
+        })
+        router.refresh()
+        onUpdated?.(updatedBot)
+      } else {
+        const createdBot = await createBot(values)
+        toast.add({
+          title: "Bot created",
+          description: `${createdBot.name} is ready.`,
+          type: "success",
+        })
+        router.refresh()
+        onCreated?.(createdBot)
+      }
     } catch (error) {
       toast.add({
-        title: "Failed to create bot",
+        title: isEditing ? "Failed to update bot" : "Failed to create bot",
         description:
           error instanceof Error ? error.message : "Something went wrong.",
         type: "error",
@@ -271,7 +303,7 @@ function BotForm({ onCreated }: BotFormProps) {
           className="rounded-lg font-medium"
         >
           {form.formState.isSubmitting && <Spinner data-icon="inline-start" />}
-          Create bot
+          {isEditing ? "Save changes" : "Create bot"}
         </Button>
       </DialogFooter>
     </form>
@@ -283,6 +315,10 @@ export interface BotDialogProps {
   open?: boolean
   onOpenChange?: (open: boolean) => void
   onCreated?: (bot: Bot) => void
+  bot?: Bot | ChatBot | null
+  onUpdated?: (bot: Bot) => void
+  title?: string
+  description?: string
 }
 
 export function BotDialog({
@@ -290,6 +326,10 @@ export function BotDialog({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
   onCreated,
+  bot,
+  onUpdated,
+  title,
+  description,
 }: BotDialogProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
   const isControlled = controlledOpen !== undefined
@@ -304,42 +344,70 @@ export function BotDialog({
     [isControlled, controlledOnOpenChange]
   )
 
+  const isEditing = Boolean(bot)
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          children ? (
-            (children as React.ReactElement)
-          ) : (
-            <Button
-              variant="secondary"
-              size="lg"
-              className="h-10 rounded-lg px-4 font-medium"
-            >
-              <PlusIcon data-icon="inline-start" />
-              Create a new bot
-            </Button>
-          )
-        }
-      />
+      {children ? (
+        <DialogTrigger render={children as React.ReactElement} />
+      ) : !isControlled ? (
+        <DialogTrigger
+          render={
+            isEditing ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-lg px-3 font-medium"
+              >
+                Edit bot
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                size="lg"
+                className="h-10 rounded-lg px-4 font-medium"
+              >
+                <PlusIcon data-icon="inline-start" />
+                Create a new bot
+              </Button>
+            )
+          }
+        />
+      ) : null}
       <DialogContent className="sm:max-w-[480px] p-5 gap-4">
         <DialogHeader className="gap-1">
           <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
-            New bot
+            {title ?? (isEditing ? "Edit bot" : "New bot")}
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Give it a face, a name, and a job to do.
+            {description ??
+              (isEditing
+                ? "Update its face, name, and instructions."
+                : "Give it a face, a name, and a job to do.")}
           </DialogDescription>
         </DialogHeader>
         {open && (
           <BotForm
-            onCreated={(bot) => {
+            bot={bot}
+            onCreated={(newBot) => {
               setOpen(false)
-              onCreated?.(bot)
+              onCreated?.(newBot)
+            }}
+            onUpdated={(updatedBot) => {
+              setOpen(false)
+              onUpdated?.(updatedBot)
             }}
           />
         )}
       </DialogContent>
     </Dialog>
   )
+}
+
+export function EditBotDialog(props: BotDialogProps) {
+  return <BotDialog {...props} />
+}
+
+export function UpdateBotDialog(props: BotDialogProps) {
+  return <BotDialog {...props} />
 }

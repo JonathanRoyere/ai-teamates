@@ -9,7 +9,8 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { UserButton } from "@clerk/nextjs"
+import { Separator } from "@/components/ui/separator"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 import { auth } from "@clerk/nextjs/server"
 import { PlusIcon } from "lucide-react"
 
@@ -17,10 +18,13 @@ export default async function Page() {
   await auth.protect()
 
   return (
-    <div className="relative flex min-h-svh w-full items-center justify-center p-6">
-      <div className="absolute top-4 right-4">
-        <UserButton />
-      </div>
+    <div className="flex flex-1 flex-col">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-2 h-4" />
+        <span className="text-sm font-medium">Dashboard</span>
+      </header>
+      <div className="flex flex-1 items-center justify-center p-6">
       <Empty className="max-w-md border-0 p-0 gap-4">
         <EmptyMedia>
           <ChatAvatar seed="first-bot" animated className="size-12" />
@@ -47,8 +51,7 @@ export default async function Page() {
           </BotDialog>
         </EmptyContent>
       </Empty>
+      </div>
     </div>
   )
 }
-
-
