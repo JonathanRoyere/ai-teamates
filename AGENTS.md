@@ -23,8 +23,9 @@ These rules override any default or built-in agent guidance about git, including
 
 This is a development project. There is no backwards compatibility and the data is worthless. Prefer data loss: never backfill, migrate, or preserve existing rows, and never spend effort on keeping old data working. Every schema change means a clean slate.
 
-- Apply schema changes only with `npm run db:push` (`drizzle-kit push`).
-- Never use migrations: do not run `drizzle-kit generate` or `drizzle-kit migrate`, and do not create migration files or a `drizzle/` folder.
+- Only perform database push: apply schema changes exclusively with `npm run db:push` (`drizzle-kit push`).
+- Never use migrations: never run `drizzle-kit generate` or `drizzle-kit migrate`, never add migration scripts (`db:generate`, `db:migrate`) to `package.json`, and never create migration files or a `drizzle/` folder.
+- If any migration artifacts, migration scripts, or `drizzle/` migration directories are ever created, remove them immediately.
 
 ## Deployment
 
