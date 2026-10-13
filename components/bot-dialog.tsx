@@ -4,7 +4,7 @@ import * as React from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { nanoid } from "nanoid"
-import { PlusIcon, ShuffleIcon } from "lucide-react"
+import { PlusIcon, ShuffleIcon, Trash2Icon } from "lucide-react"
 
 import {
   Dialog,
@@ -16,6 +16,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Field,
   FieldError,
@@ -30,7 +39,7 @@ import { ChatAvatar } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
 import { toast } from "@/components/ui/toast"
 import { botInsertSchema, type BotInsert, type Bot } from "@/db/schema"
-import { createBot, updateBot } from "@/actions/bots"
+import { createBot, updateBot, deleteBot } from "@/actions/bots"
 import type { ChatBot } from "@/chats/queries"
 import { cn } from "@/lib/utils"
 
@@ -76,11 +85,14 @@ interface BotFormProps {
   bot?: Bot | ChatBot | null
   onCreated?: (bot: Bot) => void
   onUpdated?: (bot: Bot) => void
+  onDeleted?: (botId: string) => void
 }
 
-function BotForm({ bot, onCreated, onUpdated }: BotFormProps) {
+function BotForm({ bot, onCreated, onUpdated, onDeleted }: BotFormProps) {
   const router = useRouter()
   const isEditing = Boolean(bot)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false)
+  const [isDeleting, setIsDeleting] = React.useState(false)
 
   const initialPreset = React.useMemo(() => {
     if (!bot) return "Research assistant"
@@ -169,144 +181,229 @@ function BotForm({ bot, onCreated, onUpdated }: BotFormProps) {
     }
   }
 
+  const handleDelete = async () => {
+    if (!bot) return
+    setIsDeleting(true)
+    try {
+      await deleteBot(bot.id)
+      toast.add({
+        title: "Bot deleted",
+        description: `${bot.name} was deleted.`,
+        type: "success",
+      })
+      setDeleteConfirmOpen(false)
+      onDeleted?.(bot.id)
+    } catch (error) {
+      toast.add({
+        title: "Failed to delete bot",
+        description:
+          error instanceof Error ? error.message : "Something went wrong.",
+        type: "error",
+      })
+      setIsDeleting(false)
+    }
+  }
+
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
-      {/* Presets Chips */}
-      <div className="flex flex-wrap items-center gap-2">
-        {BOT_PRESETS.map((preset) => {
-          const isSelected = selectedPreset === preset.label
-          return (
-            <button
-              key={preset.label}
-              type="button"
-              onClick={() => handleSelectPreset(preset)}
-              className={cn(
-                "h-7 rounded-full px-3 text-xs font-medium transition-colors border select-none cursor-pointer",
-                isSelected
-                  ? "border-foreground/30 bg-muted text-foreground shadow-xs"
-                  : "border-border/60 bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-              )}
-            >
-              {preset.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Face Row */}
-      <div className="flex items-center justify-between py-1">
-        <div className="flex items-center gap-3">
-          <ChatAvatar
-            seed={avatarSeed}
-            animated
-            className="size-11 rounded-none shrink-0"
-          />
-          <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium leading-none text-foreground">
-              Face
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Shuffle until you find one you like.
-            </span>
-          </div>
+    <>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+        {/* Presets Chips */}
+        <div className="flex flex-wrap items-center gap-2">
+          {BOT_PRESETS.map((preset) => {
+            const isSelected = selectedPreset === preset.label
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => handleSelectPreset(preset)}
+                className={cn(
+                  "h-7 rounded-full px-3 text-xs font-medium transition-colors border select-none cursor-pointer",
+                  isSelected
+                    ? "border-foreground/30 bg-muted text-foreground shadow-xs"
+                    : "border-border/60 bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                )}
+              >
+                {preset.label}
+              </button>
+            )
+          })}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleShuffle}
-          className="h-8 rounded-lg px-2.5 text-xs font-medium"
+
+        {/* Face Row */}
+        <div className="flex items-center justify-between py-1">
+          <div className="flex items-center gap-3">
+            <ChatAvatar
+              seed={avatarSeed}
+              animated
+              className="size-11 rounded-none shrink-0"
+            />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium leading-none text-foreground">
+                Face
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Shuffle until you find one you like.
+              </span>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleShuffle}
+            className="h-8 rounded-lg px-2.5 text-xs font-medium"
+          >
+            <ShuffleIcon data-icon="inline-start" />
+            Shuffle
+          </Button>
+        </div>
+
+        {/* Fields */}
+        <FieldGroup className="gap-3.5">
+          <Controller
+            control={form.control}
+            name="name"
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="bot-name">Name</FieldLabel>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  id="bot-name"
+                  placeholder={activePreset?.name ?? "Ada"}
+                  aria-invalid={fieldState.invalid}
+                  className="h-9 rounded-lg bg-muted/40"
+                />
+                <FieldError errors={[fieldState.error]} />
+              </Field>
+            )}
+          />
+
+          <Controller
+            control={form.control}
+            name="job"
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="bot-job">Job</FieldLabel>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  id="bot-job"
+                  placeholder={activePreset?.job ?? "Research assistant"}
+                  aria-invalid={fieldState.invalid}
+                  className="h-9 rounded-lg bg-muted/40"
+                />
+                <FieldError errors={[fieldState.error]} />
+              </Field>
+            )}
+          />
+
+          <Controller
+            control={form.control}
+            name="instructions"
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="bot-instructions">
+                  How it should work
+                </FieldLabel>
+                <Textarea
+                  {...field}
+                  value={field.value ?? ""}
+                  id="bot-instructions"
+                  placeholder={
+                    activePreset?.instructions ??
+                    "Answer briefly, cite sources, and ask before running anything destructive."
+                  }
+                  aria-invalid={fieldState.invalid}
+                  rows={3}
+                  className="min-h-[80px] resize-none rounded-lg bg-muted/40 leading-relaxed"
+                />
+                <FieldError errors={[fieldState.error]} />
+              </Field>
+            )}
+          />
+        </FieldGroup>
+
+        {/* Dialog Footer inside the form */}
+        <DialogFooter
+          className={cn(
+            "mt-2",
+            isEditing && "sm:justify-between items-stretch sm:items-center"
+          )}
         >
-          <ShuffleIcon data-icon="inline-start" />
-          Shuffle
-        </Button>
-      </div>
-
-      {/* Fields */}
-      <FieldGroup className="gap-3.5">
-        <Controller
-          control={form.control}
-          name="name"
-          render={({ field, fieldState }) => (
-            <Field data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="bot-name">Name</FieldLabel>
-              <Input
-                {...field}
-                value={field.value ?? ""}
-                id="bot-name"
-                placeholder={activePreset?.name ?? "Ada"}
-                aria-invalid={fieldState.invalid}
-                className="h-9 rounded-lg bg-muted/40"
-              />
-              <FieldError errors={[fieldState.error]} />
-            </Field>
-          )}
-        />
-
-        <Controller
-          control={form.control}
-          name="job"
-          render={({ field, fieldState }) => (
-            <Field data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="bot-job">Job</FieldLabel>
-              <Input
-                {...field}
-                value={field.value ?? ""}
-                id="bot-job"
-                placeholder={activePreset?.job ?? "Research assistant"}
-                aria-invalid={fieldState.invalid}
-                className="h-9 rounded-lg bg-muted/40"
-              />
-              <FieldError errors={[fieldState.error]} />
-            </Field>
-          )}
-        />
-
-        <Controller
-          control={form.control}
-          name="instructions"
-          render={({ field, fieldState }) => (
-            <Field data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="bot-instructions">
-                How it should work
-              </FieldLabel>
-              <Textarea
-                {...field}
-                value={field.value ?? ""}
-                id="bot-instructions"
-                placeholder={
-                  activePreset?.instructions ??
-                  "Answer briefly, cite sources, and ask before running anything destructive."
-                }
-                aria-invalid={fieldState.invalid}
-                rows={3}
-                className="min-h-[80px] resize-none rounded-lg bg-muted/40 leading-relaxed"
-              />
-              <FieldError errors={[fieldState.error]} />
-            </Field>
-          )}
-        />
-      </FieldGroup>
-
-      {/* Dialog Footer inside the form */}
-      <DialogFooter className="mt-2">
-        <DialogClose
-          render={
-            <Button type="button" variant="ghost" className="rounded-lg">
-              Cancel
+          {isEditing && bot ? (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={form.formState.isSubmitting || isDeleting}
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive justify-center sm:justify-start px-2.5 rounded-lg font-medium"
+            >
+              <Trash2Icon data-icon="inline-start" />
+              Delete bot
             </Button>
-          }
-        />
-        <Button
-          type="submit"
-          disabled={form.formState.isSubmitting}
-          className="rounded-lg font-medium"
+          ) : null}
+          <div className="flex items-center justify-end gap-2">
+            <DialogClose
+              render={
+                <Button type="button" variant="ghost" className="rounded-lg">
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              type="submit"
+              disabled={form.formState.isSubmitting || isDeleting}
+              className="rounded-lg font-medium"
+            >
+              {form.formState.isSubmitting && <Spinner data-icon="inline-start" />}
+              {isEditing ? "Save changes" : "Create bot"}
+            </Button>
+          </div>
+        </DialogFooter>
+      </form>
+
+      {isEditing && bot && (
+        <AlertDialog
+          open={deleteConfirmOpen}
+          onOpenChange={(nextOpen) => {
+            if (!isDeleting) {
+              setDeleteConfirmOpen(nextOpen)
+            }
+          }}
         >
-          {form.formState.isSubmitting && <Spinner data-icon="inline-start" />}
-          {isEditing ? "Save changes" : "Create bot"}
-        </Button>
-      </DialogFooter>
-    </form>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete bot?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete{" "}
+                <span className="font-semibold text-foreground">
+                  {bot.name}
+                </span>
+                ? This action cannot be undone and will permanently delete this bot and its conversations.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                type="button"
+                disabled={isDeleting}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={isDeleting}
+                onClick={handleDelete}
+              >
+                {isDeleting && <Spinner data-icon="inline-start" />}
+                Delete bot
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </>
   )
 }
 
@@ -317,6 +414,7 @@ export interface BotDialogProps {
   onCreated?: (bot: Bot) => void
   bot?: Bot | ChatBot | null
   onUpdated?: (bot: Bot) => void
+  onDeleted?: (botId: string) => void
   title?: string
   description?: string
 }
@@ -328,6 +426,7 @@ export function BotDialog({
   onCreated,
   bot,
   onUpdated,
+  onDeleted,
   title,
   description,
 }: BotDialogProps) {
@@ -396,6 +495,10 @@ export function BotDialog({
             onUpdated={(updatedBot) => {
               setOpen(false)
               onUpdated?.(updatedBot)
+            }}
+            onDeleted={(botId) => {
+              setOpen(false)
+              onDeleted?.(botId)
             }}
           />
         )}

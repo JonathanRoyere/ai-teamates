@@ -3,7 +3,7 @@
 import { auth } from "@clerk/nextjs/server"
 import { nanoid } from "nanoid"
 import { revalidatePath } from "next/cache"
-import { and, eq } from "drizzle-orm"
+import { and, eq, inArray } from "drizzle-orm"
 import { db } from "@/db"
 import {
   bots,
@@ -94,4 +94,50 @@ export async function createBot(
     ...createdBot,
     chatId: createdChat.id,
   }
+}
+
+export async function deleteBot(id: string): Promise<{ id: string }> {
+  const { isAuthenticated, userId } = await auth()
+  if (!isAuthenticated || !userId) {
+    throw new Error("Unauthorized")
+  }
+
+  const bot = await db.query.bots.findFirst({
+    where: and(eq(bots.id, id), eq(bots.userId, userId)),
+  })
+  if (!bot) {
+    throw new Error("Bot not found")
+  }
+
+  // Find all direct chats that include this bot for this user
+  const directMemberships = await db.query.chatMembers.findMany({
+    where: eq(chatMembers.botId, id),
+    with: {
+      chat: true,
+    },
+  })
+
+  const directChatIdsToDelete = directMemberships
+    .filter((m) => m.chat?.userId === userId && m.chat?.kind === "direct")
+    .map((m) => m.chatId)
+
+  if (directChatIdsToDelete.length > 0) {
+    await db
+      .delete(chats)
+      .where(
+        and(
+          inArray(chats.id, directChatIdsToDelete),
+          eq(chats.userId, userId)
+        )
+      )
+  }
+
+  await db
+    .delete(bots)
+    .where(and(eq(bots.id, id), eq(bots.userId, userId)))
+
+  revalidatePath("/", "layout")
+  revalidatePath("/")
+
+  return { id }
 }

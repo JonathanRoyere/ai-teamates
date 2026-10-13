@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server"
 import { notFound } from "next/navigation"
 import { getChat } from "@/chats/queries"
 import { ChatHeader } from "@/components/chat-header"
+import { ChatView } from "@/components/chat-view"
 
 export default async function ChatPage({
   params,
@@ -17,11 +18,9 @@ export default async function ChatPage({
   }
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col h-full overflow-hidden">
       <ChatHeader chat={chat} />
-      <div className="flex flex-1 flex-col p-4">
-        {/* Chat messages will be rendered here */}
-      </div>
+      <ChatView chat={chat} />
     </div>
   )
 }

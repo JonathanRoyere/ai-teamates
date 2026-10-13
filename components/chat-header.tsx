@@ -42,10 +42,22 @@ export function ChatHeader({ chat }: ChatHeaderProps) {
     [router]
   )
 
+  const handleBotDeleted = React.useCallback(
+    (_botId: string) => {
+      router.push("/")
+      router.refresh()
+    },
+    [router]
+  )
+
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 bg-background">
       {bot ? (
-        <BotDialog bot={bot} onUpdated={handleBotUpdated}>
+        <BotDialog
+          bot={bot}
+          onUpdated={handleBotUpdated}
+          onDeleted={handleBotDeleted}
+        >
           <Button
             type="button"
             variant="ghost"
