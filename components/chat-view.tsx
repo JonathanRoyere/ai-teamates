@@ -2,7 +2,18 @@
 
 import * as React from "react"
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport } from "ai"
+import type { UIMessage } from "ai"
+import {
+  useTriggerChatTransport,
+  useLoadTranscript,
+} from "@trigger.dev/sdk/chat/react"
+import type { chatAgent } from "@/trigger/chat"
+import {
+  mintChatAccessToken,
+  startChatSession,
+  loadChatTranscript,
+} from "@/actions/chat"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Conversation,
   ConversationContent,
@@ -29,22 +40,63 @@ export interface ChatViewProps {
 
 export function ChatView({ chat }: ChatViewProps) {
   const bot = chat.bot ?? chat.members?.[0]?.bot ?? null
+
+  const transport = useTriggerChatTransport<typeof chatAgent>({
+    task: "chat-agent",
+    accessToken: ({ chatId }) => mintChatAccessToken(chatId),
+    startSession: ({ chatId, clientData }) =>
+      startChatSession({ chatId, clientData }),
+    clientData: {
+      instructions: bot?.instructions || undefined,
+    },
+  })
+
+  const { messages: transcriptMessages, isLoading } = useLoadTranscript(
+    chat.id,
+    loadChatTranscript,
+    { transport }
+  )
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center h-full min-h-0 bg-background">
+        <Spinner className="size-6 text-muted-foreground" />
+      </div>
+    )
+  }
+
+  return (
+    <ChatContent
+      key={chat.id}
+      chat={chat}
+      transport={transport}
+      initialMessages={transcriptMessages}
+    />
+  )
+}
+
+interface ChatContentProps {
+  chat: ChatWithMembers
+  transport: ReturnType<typeof useTriggerChatTransport<typeof chatAgent>>
+  initialMessages: UIMessage[]
+}
+
+function ChatContent({ chat, transport, initialMessages }: ChatContentProps) {
+  const bot = chat.bot ?? chat.members?.[0]?.bot ?? null
   const botName = bot?.name || chat.name || "Assistant"
   const avatarSeed = bot?.avatar || bot?.name || chat.id
 
-  const transport = React.useMemo(() => {
-    return new DefaultChatTransport({
-      api: "/api/chat",
-      body: {
-        system: bot?.instructions || undefined,
-      },
-    })
-  }, [bot?.instructions])
-
-  const { messages, sendMessage, status, stop } = useChat({
+  const { messages, sendMessage, status, stop: aiStop } = useChat({
     id: chat.id,
     transport,
+    messages: initialMessages,
+    resume: initialMessages.length > 0,
   })
+
+  const stop = React.useCallback(() => {
+    aiStop()
+    transport.stopGeneration(chat.id)
+  }, [aiStop, transport, chat.id])
 
   const [input, setInput] = React.useState("")
 
