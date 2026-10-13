@@ -1,20 +1,92 @@
-import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
+import {
+  index,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
+import { nanoid } from "nanoid";
 import { z } from "zod";
 
-export const bots = pgTable("bots", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: text("user_id").notNull(),
-  name: text("name").notNull(),
-  description: text("description"),
-  instructions: text("instructions"),
-  avatarSeed: text("avatar_seed"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
+export const bots = pgTable(
+  "bots",
+  {
+    id: text("id").primaryKey().$defaultFn(() => nanoid()),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    avatar: text("avatar").notNull().$defaultFn(() => nanoid()),
+    job: text("job").notNull(),
+    instructions: text("instructions"),
+    sandboxId: text("sandbox_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("bots_user_id_idx").on(table.userId),
+  ]
+);
+
+export const chatKindEnum = pgEnum("chat_kind", ["direct", "group"]);
+
+export const chats = pgTable(
+  "chats",
+  {
+    id: text("id").primaryKey().$defaultFn(() => nanoid()),
+    userId: text("user_id").notNull(),
+    kind: chatKindEnum("kind").default("direct").notNull(),
+    name: text("name"),
+    lastMessagePreview: text("last_message_preview"),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("chats_user_id_idx").on(table.userId),
+  ]
+);
+
+export const chatMembers = pgTable(
+  "chat_members",
+  {
+    chatId: text("chat_id")
+      .notNull()
+      .references(() => chats.id, { onDelete: "cascade" }),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.chatId, table.botId] }),
+    index("chat_members_bot_id_idx").on(table.botId),
+  ]
+);
+
+export const botsRelations = relations(bots, ({ many }) => ({
+  memberships: many(chatMembers),
+}));
+
+export const chatsRelations = relations(chats, ({ many }) => ({
+  members: many(chatMembers),
+}));
+
+export const chatMembersRelations = relations(chatMembers, ({ one }) => ({
+  chat: one(chats, {
+    fields: [chatMembers.chatId],
+    references: [chats.id],
+  }),
+  bot: one(bots, {
+    fields: [chatMembers.botId],
+    references: [bots.id],
+  }),
+}));
 
 export const botInsertSchema = createInsertSchema(bots, {
   name: (schema) =>
@@ -22,52 +94,28 @@ export const botInsertSchema = createInsertSchema(bots, {
       .trim()
       .min(1, "Name is required")
       .max(64, "Name must be 64 characters or less"),
-  description: (schema) =>
+  avatar: (schema) => schema.trim().optional(),
+  job: (schema) =>
     schema
       .trim()
-      .max(256, "Description must be 256 characters or less")
-      .optional(),
+      .min(1, "Job is required")
+      .max(256, "Job must be 256 characters or less"),
   instructions: (schema) =>
     schema
       .trim()
       .max(4000, "Instructions must be 4000 characters or less")
       .optional(),
-  avatarSeed: (schema) => schema.trim().optional(),
 }).omit({
   id: true,
   userId: true,
+  sandboxId: true,
   createdAt: true,
-  updatedAt: true,
 });
 
 export type BotInsert = z.infer<typeof botInsertSchema>;
 export type Bot = typeof bots.$inferSelect;
+export type Chat = typeof chats.$inferSelect;
+export type ChatInsert = typeof chats.$inferInsert;
+export type ChatMember = typeof chatMembers.$inferSelect;
+export type ChatMemberInsert = typeof chatMembers.$inferInsert;
 
-export const todos = pgTable("todos", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: text("user_id").notNull(),
-  title: text("title").notNull(),
-  completed: boolean("completed").default(false).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
-
-export const todoInsertSchema = createInsertSchema(todos, {
-  title: (schema) =>
-    schema
-      .trim()
-      .min(1, "Title is required")
-      .max(256, "Title must be 256 characters or less"),
-  completed: (schema) => schema.optional(),
-}).omit({
-  id: true,
-  userId: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type TodoInsert = z.infer<typeof todoInsertSchema>;
-export type Todo = typeof todos.$inferSelect;

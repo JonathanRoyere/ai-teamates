@@ -1,33 +1,54 @@
+import { BotDialog } from "@/components/bot-dialog"
+import { ChatAvatar } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { SignInButton, SignUpButton, Show, UserButton } from "@clerk/nextjs"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import { UserButton } from "@clerk/nextjs"
+import { auth } from "@clerk/nextjs/server"
+import { PlusIcon } from "lucide-react"
 
-export default function Page() {
+export default async function Page() {
+  await auth.protect()
+
   return (
-    <div className="flex min-h-svh p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
-        <div className="flex items-center gap-2">
-          <Show when="signed-out">
-            <SignInButton mode="modal">
-              <Button size="sm">Sign in</Button>
-            </SignInButton>
-            <SignUpButton mode="modal">
-              <Button size="sm" variant="outline">Sign up</Button>
-            </SignUpButton>
-          </Show>
-          <Show when="signed-in">
-            <UserButton />
-          </Show>
-        </div>
-        <div>
-          <h1 className="font-medium">Project ready!</h1>
-          <p>You may now add components and start building.</p>
-          <p>We&apos;ve already added the button component for you.</p>
-          <Button className="mt-2">Button</Button>
-        </div>
-        <div className="font-mono text-xs text-muted-foreground">
-          (Press <kbd>d</kbd> to toggle dark mode)
-        </div>
+    <div className="relative flex min-h-svh w-full items-center justify-center p-6">
+      <div className="absolute top-4 right-4">
+        <UserButton />
       </div>
+      <Empty className="max-w-md border-0 p-0 gap-4">
+        <EmptyMedia>
+          <ChatAvatar seed="first-bot" animated className="size-12" />
+        </EmptyMedia>
+        <EmptyHeader className="max-w-md gap-2">
+          <EmptyTitle className="text-xl font-semibold tracking-tight text-foreground">
+            Meet your first bot
+          </EmptyTitle>
+          <EmptyDescription className="text-sm text-muted-foreground sm:text-base">
+            Every bot gets its own personality, memory, and face. Spin one up and
+            start the conversation.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent className="mt-2">
+          <BotDialog>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="h-10 rounded-lg px-4 font-medium"
+            >
+              <PlusIcon data-icon="inline-start" />
+              Create a new bot
+            </Button>
+          </BotDialog>
+        </EmptyContent>
+      </Empty>
     </div>
   )
 }
+
+
