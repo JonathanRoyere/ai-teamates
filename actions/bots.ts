@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server"
 import { nanoid } from "nanoid"
 import { revalidatePath } from "next/cache"
 import { and, eq, inArray } from "drizzle-orm"
+import { Daytona } from "@daytona/sdk"
 import { db } from "@/db"
 import {
   bots,
@@ -13,6 +14,13 @@ import {
   type BotInsert,
   type Bot,
 } from "@/db/schema"
+
+function getDaytonaClient() {
+  return new Daytona({
+    apiKey: process.env.DAYTONA_API_KEY,
+    apiUrl: process.env.DAYTONA_API_URL || "https://app.daytona.io/api",
+  })
+}
 
 export async function updateBot(
   id: string,
@@ -56,43 +64,60 @@ export async function createBot(
 
   const validated = botInsertSchema.parse(input)
 
+  const daytona = getDaytonaClient()
+  const sandbox = await daytona.create()
+  const sandboxId = sandbox.id
+
   const botId = nanoid()
   const chatId = nanoid()
 
-  const [[createdBot], [createdChat]] = await db.batch([
-    db
-      .insert(bots)
-      .values({
-        id: botId,
-        userId,
-        name: validated.name,
-        job: validated.job,
-        avatar: validated.avatar?.trim() || undefined,
-        instructions: validated.instructions?.trim() || null,
-      })
-      .returning(),
-    db
-      .insert(chats)
-      .values({
-        id: chatId,
-        userId,
-        kind: "direct",
-      })
-      .returning(),
-    db
-      .insert(chatMembers)
-      .values({
-        chatId,
-        botId,
-      })
-      .returning(),
-  ])
+  try {
+    const [[createdBot], [createdChat]] = await db.batch([
+      db
+        .insert(bots)
+        .values({
+          id: botId,
+          userId,
+          name: validated.name,
+          job: validated.job,
+          avatar: validated.avatar?.trim() || undefined,
+          instructions: validated.instructions?.trim() || null,
+          sandboxId,
+        })
+        .returning(),
+      db
+        .insert(chats)
+        .values({
+          id: chatId,
+          userId,
+          kind: "direct",
+        })
+        .returning(),
+      db
+        .insert(chatMembers)
+        .values({
+          chatId,
+          botId,
+        })
+        .returning(),
+    ])
 
-  revalidatePath("/")
+    revalidatePath("/")
 
-  return {
-    ...createdBot,
-    chatId: createdChat.id,
+    return {
+      ...createdBot,
+      chatId: createdChat.id,
+    }
+  } catch (error) {
+    try {
+      await daytona.delete(sandbox)
+    } catch (cleanupError) {
+      console.error(
+        "Failed to delete sandbox after bot creation failure:",
+        cleanupError
+      )
+    }
+    throw error
   }
 }
 
@@ -107,6 +132,16 @@ export async function deleteBot(id: string): Promise<{ id: string }> {
   })
   if (!bot) {
     throw new Error("Bot not found")
+  }
+
+  if (bot.sandboxId) {
+    try {
+      const daytona = getDaytonaClient()
+      const sandbox = await daytona.get(bot.sandboxId)
+      await daytona.delete(sandbox)
+    } catch (error) {
+      console.error(`Failed to delete Daytona sandbox ${bot.sandboxId}:`, error)
+    }
   }
 
   // Find all direct chats that include this bot for this user

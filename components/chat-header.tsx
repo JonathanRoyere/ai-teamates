@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { MonitorIcon } from "lucide-react"
 
+import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { ChatAvatar } from "@/components/chat-avatar"
 import { BotDialog } from "@/components/bot-dialog"
@@ -15,6 +16,21 @@ export interface ChatHeaderProps {
 
 export function ChatHeader({ chat }: ChatHeaderProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const isDesktopOpen = searchParams.get("desktop") === "true"
+
+  const toggleDesktop = React.useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams.toString())
+    if (isDesktopOpen) {
+      nextParams.delete("desktop")
+    } else {
+      nextParams.set("desktop", "true")
+    }
+    const query = nextParams.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }, [isDesktopOpen, pathname, router, searchParams])
+
   // Ignore group chats for now, simply use the first chat member's information
   const serverBot = chat.bot ?? chat.members?.[0]?.bot ?? null
   const [updatedBot, setUpdatedBot] = React.useState<ChatBot | null>(null)
@@ -86,10 +102,17 @@ export function ChatHeader({ chat }: ChatHeaderProps) {
 
       <Button
         type="button"
-        variant="ghost"
+        variant={isDesktopOpen ? "secondary" : "ghost"}
         size="icon-sm"
-        className="size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+        className={cn(
+          "size-8 rounded-lg cursor-pointer transition-colors",
+          isDesktopOpen
+            ? "text-secondary-foreground"
+            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+        )}
         aria-label="Desktop"
+        aria-pressed={isDesktopOpen}
+        onClick={toggleDesktop}
       >
         <MonitorIcon className="size-4" />
       </Button>

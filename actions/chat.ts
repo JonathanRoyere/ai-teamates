@@ -27,7 +27,18 @@ export async function startChatSession(
     throw new Error("Chat not found")
   }
 
-  return startSessionAction(params)
+  const bot = existingChat.bot ?? existingChat.members?.[0]?.bot ?? null
+
+  return startSessionAction({
+    ...params,
+    clientData: {
+      botName: params.clientData?.botName || bot?.name || undefined,
+      botJob: params.clientData?.botJob || bot?.job || undefined,
+      instructions:
+        params.clientData?.instructions ?? bot?.instructions ?? undefined,
+      sandboxId: params.clientData?.sandboxId ?? bot?.sandboxId ?? undefined,
+    },
+  })
 }
 
 export async function mintChatAccessToken(chatId: string) {
