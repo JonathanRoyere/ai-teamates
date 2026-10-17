@@ -31,9 +31,16 @@ export default async function ChatPage({
   const hasSandbox = Boolean(bot?.sandboxId)
 
   return (
-    <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
-      <ResizablePanel defaultSize={isDesktopOpen ? 60 : 100} minSize={30}>
-        <div className="flex flex-1 flex-col h-full overflow-hidden">
+    <ResizablePanelGroup
+      orientation="horizontal"
+      className="h-full max-h-full w-full overflow-hidden"
+    >
+      <ResizablePanel
+        defaultSize={isDesktopOpen ? 60 : 100}
+        minSize={30}
+        className="h-full max-h-full overflow-hidden"
+      >
+        <div className="flex flex-1 flex-col h-full max-h-full overflow-hidden">
           <ChatHeader chat={chat} />
           <ChatView chat={chat} />
         </div>
@@ -41,7 +48,11 @@ export default async function ChatPage({
       {isDesktopOpen && (
         <>
           <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={40} minSize={20}>
+          <ResizablePanel
+            defaultSize={40}
+            minSize={20}
+            className="h-full max-h-full overflow-hidden"
+          >
             <VncSandboxPreview chatId={chatId} hasSandbox={hasSandbox} />
           </ResizablePanel>
         </>

@@ -140,7 +140,7 @@ export function VncSandboxPreview({
           "bg-background transition-all",
           isFullscreen
             ? "fixed inset-2 sm:inset-4 md:inset-6 z-50 flex flex-col rounded-xl border border-border shadow-2xl ring-1 ring-foreground/10 overflow-hidden"
-            : "relative flex flex-col h-full w-full overflow-hidden"
+            : "relative flex flex-col h-full max-h-full w-full overflow-hidden"
         )}
       >
         {/* Top Header Toolbar */}
@@ -211,7 +211,7 @@ export function VncSandboxPreview({
                   variant="ghost"
                   size="icon-sm"
                   className="size-8 text-muted-foreground hover:text-foreground cursor-pointer"
-                  title="Expand to Fullscreen"
+                  title="Fullscreen"
                   onClick={() => setIsFullscreen(true)}
                 >
                   <Maximize2Icon className="size-3.5" />
@@ -222,7 +222,7 @@ export function VncSandboxPreview({
         </div>
 
         {/* Content Area */}
-        <div className="relative flex-1 w-full h-full min-h-0 bg-neutral-950 flex items-center justify-center overflow-hidden">
+        <div className="relative flex-1 w-full h-full min-h-0 max-h-full bg-neutral-950 flex items-center justify-center overflow-hidden">
           {!hasSandbox ? (
             <div className="flex flex-col items-center justify-center gap-3 p-6 text-center max-w-sm">
               <div className="size-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
@@ -277,23 +277,25 @@ export function VncSandboxPreview({
               <iframe
                 src={url}
                 title="Daytona Sandbox Desktop"
-                className="w-full h-full border-0 select-none bg-neutral-950"
+                className="w-full h-full min-h-0 min-w-0 border-0 select-none bg-neutral-950 block"
                 allow="clipboard-read; clipboard-write; fullscreen"
               />
 
-              {/* In preview mode only: Clickable overlay to open fullscreen */}
+              {/* Corner button to open fullscreen */}
               {!isFullscreen && (
-                <button
-                  type="button"
-                  className="absolute inset-0 z-10 w-full h-full cursor-pointer flex items-center justify-center bg-black/0 hover:bg-black/30 transition-all group border-0 p-0 m-0 outline-none"
-                  onClick={() => setIsFullscreen(true)}
-                  aria-label="Open sandbox desktop in fullscreen"
-                >
-                  <div className="opacity-0 group-hover:opacity-100 transition-all duration-150 transform scale-95 group-hover:scale-100 bg-background/90 text-foreground text-xs font-medium px-3.5 py-1.5 rounded-full shadow-lg border border-border/80 flex items-center gap-2 backdrop-blur-md pointer-events-none select-none">
+                <div className="absolute top-3 right-3 z-20">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 px-2.5 gap-1.5 text-xs font-medium shadow-md backdrop-blur-md bg-background/90 hover:bg-background border border-border/70 cursor-pointer transition-all"
+                    onClick={() => setIsFullscreen(true)}
+                    title="Open in Fullscreen"
+                  >
                     <Maximize2Icon className="size-3.5" />
-                    <span>Click to control in fullscreen</span>
-                  </div>
-                </button>
+                    <span>Fullscreen</span>
+                  </Button>
+                </div>
               )}
             </>
           ) : null}

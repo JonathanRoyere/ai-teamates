@@ -25,13 +25,13 @@ export default function RootLayout({
       lang="en"
       suppressHydrationWarning
       className={cn(
-        "antialiased",
+        "h-full overflow-hidden antialiased",
         fontMono.variable,
         "font-sans",
         geist.variable
       )}
     >
-      <body>
+      <body className="h-full overflow-hidden">
         <ClerkProvider appearance={{ theme: shadcn }}>
           <ThemeProvider>
             <TooltipProvider>{children}</TooltipProvider>
